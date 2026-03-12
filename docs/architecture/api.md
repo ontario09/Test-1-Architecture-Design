@@ -319,3 +319,192 @@ class InvoiceRepository
     }
 }
 ```
+
+## 4. Standar Pengujian (Testing)
+
+### A. Unit Test (Logic Validation)
+
+Menguji logika di Service Layer dengan melakukan mocking pada repository agar tes berjalan cepat dan tidak mengotori data asli.
+
+**tests/Unit/Services/ReconciliationServiceTest.php**
+```php
+<?php
+
+namespace Tests\Unit\Services;
+
+use Tests\TestCase;
+use App\Services\ReconciliationService;
+use App\Repositories\InvoiceRepository;
+use App\Models\Invoice;
+use Mockery;
+use Exception;
+
+class ReconciliationServiceTest extends TestCase
+{
+    public function test_harus_gagal_jika_nominal_bank_berbeda_dengan_nominal_invoice(): void
+    {
+        // 1. Siapkan Mock Repository
+        $mockRepo = Mockery::mock(InvoiceRepository::class);
+
+        // 2. Definisikan data invoice palsu
+        $fakeInvoice = new Invoice();
+        $fakeInvoice->id = 'INV-1';
+        $fakeInvoice->total_amount = 1000000;
+
+        // 3. Harapkan method findByReference dipanggil dan mengembalikan invoice palsu
+        $mockRepo->shouldReceive('findByReference')
+            ->once()
+            ->with('INV-1')
+            ->andReturn($fakeInvoice);
+
+        // 4. Buat service dengan mock repository
+        $service = new ReconciliationService($mockRepo);
+
+        // 5. Input yang salah (nominal berbeda)
+        $input = ['amount' => 500000, 'refCode' => 'INV-1', 'bankId' => 'TRX-99'];
+
+        // 6. Expect dan Assert
+        $this->expectException(Exception::class);
+        $this->expectExceptionMessage("Nominal tidak cocok");
+
+        $service->handle($input);
+    }
+
+    public function test_harus_berhasil_jika_nominal_dan_referensi_sesuai(): void
+    {
+        // 1. Siapkan Mock Repository
+        $mockRepo = Mockery::mock(InvoiceRepository::class);
+
+        // 2. Definisikan data invoice palsu
+        $fakeInvoice = new Invoice();
+        $fakeInvoice->id = 'INV-1';
+        $fakeInvoice->total_amount = 1000000;
+
+        // 3. Mock reconciliation result
+        $fakeReconciliation = (object) ['id' => 1];
+
+        // 4. Harapkan method dipanggil
+        $mockRepo->shouldReceive('findByReference')
+            ->once()
+            ->with('INV-1')
+            ->andReturn($fakeInvoice);
+
+        $mockRepo->shouldReceive('markAsPaid')
+            ->once()
+            ->with('INV-1', 'TRX-99')
+            ->andReturn($fakeReconciliation);
+
+        // 5. Buat service dengan mock repository
+        $service = new ReconciliationService($mockRepo);
+
+        // 6. Input yang benar
+        $input = ['amount' => 1000000, 'refCode' => 'INV-1', 'bankId' => 'TRX-99'];
+
+        // 7. Eksekusi
+        $result = $service->handle($input);
+
+        // 8. Assert
+        $this->assertEquals('matched', $result['status']);
+        $this->assertEquals(1, $result['reconciliation_id']);
+    }
+}
+```
+
+### B. API Test (Functional Integration)
+
+Menguji keseluruhan alur mulai dari Route, Middleware Tenant, hingga Database untuk memastikan sistem bekerja di lingkungan nyata.
+
+**tests/Feature/ReconciliationApiTest.php**
+```php
+<?php
+
+namespace Tests\Feature;
+
+use Tests\TestCase;
+use App\Models\Invoice;
+use App\Models\Reconciliation;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+
+class ReconciliationApiTest extends TestCase
+{
+    use RefreshDatabase; // Mereset database setelah setiap test
+
+    public function test_post_api_reconcile_dengan_tenant_valid_harus_berhasil(): void
+    {
+        // 1. Setup: Buat data invoice yang akan di-reconcile
+        $invoice = Invoice::create([
+            'invoice_number' => 'INV-001',
+            'total_amount' => 1000000,
+            'status' => 'UNPAID',
+        ]);
+
+        $payload = [
+            'amount' => 1000000,
+            'refCode' => 'INV-001',
+            'bankId' => 'TRX-99',
+        ];
+
+        // 2. Action: Lakukan request API
+        $response = $this->withHeaders(['X-Tenant-Code' => 'COMPANY_A'])
+            ->postJson('/api/reconcile', $payload);
+
+        // 3. Assertion: Periksa response
+        $response->assertStatus(200)
+                 ->assertJson([
+                     'status' => 'success',
+                 ]);
+
+        // 4. Assertion: Periksa perubahan di database
+        $this->assertDatabaseHas('invoices', [
+            'id' => $invoice->id,
+            'status' => 'PAID'
+        ]);
+
+        $this->assertDatabaseHas('reconciliations', [
+            'invoice_id' => $invoice->id,
+            'bank_id' => 'TRX-99'
+        ]);
+    }
+
+    public function test_post_api_reconcile_tanpa_tenant_code_harus_gagal(): void
+    {
+        $payload = [
+            'amount' => 1000000,
+            'refCode' => 'INV-001',
+            'bankId' => 'TRX-99',
+        ];
+
+        $response = $this->postJson('/api/reconcile', $payload);
+
+        $response->assertStatus(400)
+                 ->assertJson([
+                     'error' => 'Kode tenant tidak ditemukan'
+                 ]);
+    }
+
+    public function test_post_api_reconcile_dengan_nominal_salah_harus_gagal(): void
+    {
+        // Setup
+        Invoice::create([
+            'invoice_number' => 'INV-001',
+            'total_amount' => 1000000,
+            'status' => 'UNPAID',
+        ]);
+
+        $payload = [
+            'amount' => 500000, // Nominal salah
+            'refCode' => 'INV-001',
+            'bankId' => 'TRX-99',
+        ];
+
+        $response = $this->withHeaders(['X-Tenant-Code' => 'COMPANY_A'])
+            ->postJson('/api/reconcile', $payload);
+
+        $response->assertStatus(400)
+                 ->assertJson([
+                     'status' => 'error',
+                     'message' => 'Nominal tidak cocok'
+                 ]);
+    }
+}
+```
