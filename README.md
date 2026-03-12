@@ -1,53 +1,45 @@
-# Dokumentasi Skema Database ERP (Multi-Company)
+# ERP Multi-Company System
 
-Dokumen ini menjelaskan struktur data untuk mendukung fitur Multi-tenancy, Rekonsiliasi Payment, dan Laporan Konsolidasi.
+Selamat datang di repositori utama proyek ERP Multi-Company. Sistem ini dirancang untuk menangani 10+ anak perusahaan dengan isolasi data tingkat tinggi dan fitur rekonsiliasi otomatis.
 
-## Entity Relationship Diagram (ERD)
+---
 
-```mermaid
-erDiagram
-    COMPANIES ||--o{ USERS : "has"
-    COMPANIES ||--o{ CHART_OF_ACCOUNTS : "defines"
-    COMPANIES ||--o{ INVOICES : "issues"
-    COMPANIES ||--o{ BANK_STATEMENTS : "uploads"
+## 📋 Dokumentasi Teknis
 
-    COMPANIES {
-        uuid id PK
-        string name
-        uuid parent_company_id FK "Untuk Konsolidasi"
-    }
+Untuk memastikan standarisasi pengembangan, seluruh arsitektur telah didokumentasikan "as-code". Silakan merujuk pada tautan di bawah ini:
 
-    CHART_OF_ACCOUNTS {
-        uuid id PK
-        uuid company_id FK
-        string account_code
-        string account_name
-    }
+### 1. Arsitektur Database & Multi-Tenancy
+Kami menggunakan strategi **Database-per-Tenant** untuk menjamin isolasi data antar anak perusahaan.
+* [**Lihat Rancangan ERD & Skema Database**](docs/database/schema.md)
+  * *Isi: Main DB Control Plane, Tenant DB Data Plane, dan Panduan Middleware.*
 
-    INVOICES {
-        uuid id PK
-        uuid company_id FK
-        string invoice_number
-        decimal total_amount
-        string status
-    }
+### 2. Arsitektur API (Coming Soon)
+Dokumentasi kontrak API menggunakan standar OpenAPI/Swagger.
+* [Desain Endpoint Rekonsiliasi](docs/api/v1-contract.md)
 
-    BANK_STATEMENTS {
-        uuid id PK
-        uuid company_id FK
-        decimal transaction_amount
-        string reference_code
-        boolean is_reconciled
-    }
+### 3. Strategi Infrastruktur
+Panduan mengenai penanganan beban kerja berat dan sinkronisasi data.
+* [Strategi Caching & Queue](docs/architecture/system-flow.md)
 
-    PAYMENT_RECONCILIATIONS {
-        uuid id PK
-        uuid company_id FK
-        uuid invoice_id FK
-        uuid bank_statement_id FK
-        decimal matched_amount
-        string match_method
-    }
+---
 
-    INVOICES ||--o{ PAYMENT_RECONCILIATIONS : "matched_to"
-    BANK_STATEMENTS ||--o{ PAYMENT_RECONCILIATIONS : "links_to"
+## 🛠 Panduan Cepat (Quick Start)
+
+### Identifikasi Tenant
+Sistem mengidentifikasi tenant berdasarkan dua metode:
+1. **URL Subdomain**: `namaanakperusahaan.erp-sistem.com`
+2. **Header HTTP**: `X-Tenant-Code: CMP_XXX`
+
+### Menjalankan Migrasi
+Karena kita menggunakan multi-database, pastikan Anda menjalankan perintah yang benar:
+* **Main DB**: `command-migrate-main`
+* **Semua Tenant**: `command-migrate-tenants`
+
+---
+
+## 👥 Tim Pengembang
+* **Lead Developer**: @YourName
+* **Backend Team**: @BackendTeam
+
+---
+> **Catatan**: Jika Anda melakukan perubahan pada struktur tabel, Anda **WAJIB** memperbarui file [schema.md](docs/database/schema.md) menggunakan sintaks Mermaid sebelum melakukan Pull Request.
