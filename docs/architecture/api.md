@@ -55,6 +55,15 @@ Pemisahan kode ke dalam beberapa layer bertujuan untuk mencapai *Separation of C
 | **Repository (Opsional)** | Mengisolasi query database | Fleksibel terhadap perubahan database |
 | **Model** | Representasi data dan interaksi dengan database | Konsistensi struktur data |
 
+### Dimana Caching & Background Process Bekerja?
+
+| Layer | Peran dalam Caching & Background Process |
+|-------|------------------------------------------|
+| **Controller** | Menerima request, langsung mengembalikan response 202 Accepted dengan job_id |
+| **Service** | Memutuskan apakah suatu proses perlu di-queue atau bisa langsung dieksekusi |
+| **Queue/Job Layer** | Layer baru yang menangani proses berat di background |
+| **Cache Layer** | Layer baru antara Service dan Database untuk menyimpan hasil agregasi |
+
 ### Alur Data Antar Layer
 
 ```mermaid
@@ -317,6 +326,114 @@ class InvoiceRepository
             ]);
         });
     }
+}
+```
+
+### F. Queue & Cache Layer (Background Process (Opsional ketika Optimize))
+
+**app/Jobs/GenerateConsolidationReport.php**
+```php
+<?php
+
+namespace App\Jobs;
+
+use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldQueue;
+use Illuminate\Foundation\Bus\Dispatchable;
+use Illuminate\Queue\InteractsWithQueue;
+use Illuminate\Queue\SerializesModels;
+use App\Services\TenantManager;
+use Illuminate\Support\Facades\Cache;
+
+class GenerateConsolidationReport implements ShouldQueue
+{
+    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
+
+    public $tries = 3; // Retry 3 kali
+    public $backoff = 5; // Jeda 5 detik antar retry
+
+    public function __construct(
+        protected string $reportId,
+        protected array $tenantCodes,
+        protected string $userId
+    ) {}
+
+    public function handle(TenantManager $tenantManager): void
+    {
+        $results = [];
+        
+        foreach ($this->tenantCodes as $tenantCode) {
+            try {
+                $tenantManager->setConnection($tenantCode);
+                // Query data per tenant dengan chunking
+                $results[$tenantCode] = $this->getTenantData();
+            } catch (\Exception $e) {
+                // Jika gagal, job akan retry
+                throw $e;
+            }
+        }
+        
+        // Simpan hasil di cache dengan TTL 1 jam
+        Cache::put(
+            "consolidation_report_{$this->reportId}", 
+            $results, 
+            now()->addHour()
+        );
+        
+        // Notifikasi user via event
+        event(new ReportGenerated($this->userId, $this->reportId));
+    }
+
+    protected function getTenantData(): array
+    {
+        // Gunakan chunking agar tidak OOM
+        return DB::table('transactions')
+            ->orderBy('id')
+            ->chunk(1000, function ($transactions) {
+                // Proses per chunk
+            });
+    }
+}
+```
+
+**app/Http/Controllers/ReportController.php**
+```php
+public function consolidate()
+{
+    $reportId = Str::uuid();
+    $tenantCodes = $this->tenantManager->getAllTenantCodes();
+    
+    // Dispatch job ke queue
+    GenerateConsolidationReport::dispatch(
+        $reportId, 
+        $tenantCodes, 
+        auth()->id()
+    );
+    
+    return response()->json([
+        'status' => 'accepted',
+        'job_id' => $reportId,
+        'message' => 'Laporan sedang diproses'
+    ], 202);
+}
+```
+
+**app/Http/Controllers/ReportController.php** (Method polling)
+```php
+public function checkReport(string $reportId)
+{
+    $result = Cache::get("consolidation_report_{$reportId}");
+    
+    if ($result) {
+        return response()->json([
+            'status' => 'completed',
+            'data' => $result
+        ]);
+    }
+    
+    return response()->json([
+        'status' => 'processing'
+    ]);
 }
 ```
 
