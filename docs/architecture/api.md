@@ -79,7 +79,6 @@ graph TD
 4. **Model hanya untuk representasi data** - tidak boleh berisi logic bisnis kompleks
 5. **Setiap layer hanya bicara dengan layer di bawahnya** - jangan lompat-lompat
 
-```markdown
 ## 3. Contoh Implementasi Kode (Laravel)
 
 ### A. Model Layer (Data Contract & Type Safety)
