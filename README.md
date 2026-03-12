@@ -13,9 +13,10 @@ Kami menggunakan strategi **Database-per-Tenant** untuk menjamin isolasi data an
 * [**Lihat Rancangan ERD & Skema Database**](docs/database/schema.md)
   * *Isi: Main DB Control Plane, Tenant DB Data Plane, dan Panduan Middleware.*
 
-### 2. Arsitektur API (Coming Soon)
-Dokumentasi kontrak API menggunakan standar OpenAPI/Swagger.
-* [Desain Endpoint Rekonsiliasi](docs/api/v1-contract.md)
+### 2. Arsitektur API & Pola Layanan (Service Pattern)
+Standar komunikasi antar komponen dan pemisahan logika bisnis menggunakan Service Layer.
+* [**Lihat Arsitektur API & Rekonsiliasi**](docs/architecture/api.md)
+  * *Isi: Sequence Diagram, Layering (Controller, Service, Repository), Model/DTO, dan Standar Testing.*
 
 ### 3. Strategi Infrastruktur
 Panduan mengenai penanganan beban kerja berat dan sinkronisasi data.
@@ -42,4 +43,4 @@ Karena kita menggunakan multi-database, pastikan Anda menjalankan perintah yang 
 * **Backend Team**: @BackendTeam
 
 ---
-> **Catatan**: Jika Anda melakukan perubahan pada struktur tabel, Anda **WAJIB** memperbarui file [schema.md](docs/database/schema.md) menggunakan sintaks Mermaid sebelum melakukan Pull Request.
+> **Catatan**: Jika Anda melakukan perubahan pada struktur tabel atau logika bisnis inti, Anda **WAJIB** memperbarui file dokumentasi terkait di folder `docs/` menggunakan sintaks Mermaid atau Markdown sebelum melakukan Pull Request.
