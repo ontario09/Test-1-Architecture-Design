@@ -23,6 +23,11 @@ Panduan mengenai penanganan komputasi berat, terutama untuk laporan konsolidasi 
 * [**Lihat Strategi Caching & Queue**](docs/architecture/system-flow.md)
   * *Isi: Background Processing (Queue), Distributed Cache dengan Redis, mekanisme Dead Letter Queue (DLQ), dan Data Chunking.*
 
+### 4. Estimasi Pengembangan (Mandays)
+Berisi rincian alokasi waktu kerja untuk setiap fitur utama berdasarkan analisis kompleksitas teknis dan kebutuhan integrasi.
+* [**Lihat Estimasi Waktu & Pembagian Kerja**](docs/estimates.md)
+  * *Isi: Breakdown Mandays untuk Riset, Backend, Frontend, dan Testing untuk fitur Custom PO, Deposit, Payment Gateway, dan Chat.*
+
 ---
 
 ## 🛠 Panduan Cepat (Quick Start)
